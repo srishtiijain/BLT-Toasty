@@ -1,3 +1,3 @@
-"""Toasty - GitHub bot for AI code reviews, project management, and security analysis."""
+from .celery import app as celery_app
 
-__version__ = "0.1.0"
+__all__ = ("celery_app",)

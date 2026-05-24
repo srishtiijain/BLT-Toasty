@@ -1,185 +1,226 @@
 # Contributing to Toasty
 
-Thank you for your interest in contributing to Toasty! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to Toasty, the AI-powered code review assistant from OWASP BLT! This guide will help you get your development environment set up and walk you through the contribution process.
 
-## Code of Conduct
+## Table of Contents
 
-This project follows the OWASP Code of Conduct. By participating, you are expected to uphold this code.
+- [Prerequisites](#prerequisites)
+- [Getting Started](#getting-started)
+- [Environment Variables](#environment-variables)
+- [Running the Django Application](#running-the-django-application)
+- [Running the Cloudflare Worker](#running-the-cloudflare-worker)
+- [Code Style and Linting](#code-style-and-linting)
+- [Running Tests](#running-tests)
+- [Submitting a Pull Request](#submitting-a-pull-request)
 
-## How to Contribute
+---
 
-### Reporting Bugs
+## Prerequisites
 
-Before creating bug reports, please check existing issues to avoid duplicates. When creating a bug report, include:
+Before you begin, make sure you have the following installed:
 
-- A clear and descriptive title
-- Steps to reproduce the issue
-- Expected behavior
-- Actual behavior
-- Your environment (OS, Python version, etc.)
-- Any relevant logs or error messages
+- **Python** >= 3.13
+- **Poetry** — dependency management for the Django app ([installation guide](https://python-poetry.org/docs/#installation))
+- **Node.js** and **npm** — required for the Cloudflare Worker tooling
+- **Docker** and **Docker Compose** — for running services (PostgreSQL, Redis, Qdrant) locally
+- **Git**
 
-### Suggesting Features
+---
 
-Feature requests are welcome! Please provide:
+## Getting Started
 
-- A clear and descriptive title
-- Detailed description of the proposed feature
-- Use cases and benefits
-- Any potential drawbacks or considerations
+1. **Fork and clone the repository:**
 
-### Pull Requests
+   ```bash
+   git clone https://github.com/<your-username>/BLT-Toasty.git
+   cd BLT-Toasty
+   ```
 
-1. **Fork the repository** and create your branch from `main`
+2. **Set up your environment variables:**
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   Open `.env` and fill in the required values. See [Environment Variables](#environment-variables) for details.
+
+3. **Install Django app dependencies:**
+
+   ```bash
+   poetry install
+   ```
+
+4. **Install Cloudflare Worker dependencies:**
+
+   ```bash
+   npm install
+   ```
+
+5. **Set up pre-commit hooks:**
+
+   ```bash
+   pip install pre-commit
+   pre-commit install
+   ```
+
+---
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and fill in the values:
+
+```bash
+cp .env.example .env
+```
+
+| Variable            | Description                                      | Required |
+|---------------------|--------------------------------------------------|----------|
+| `SECRET_KEY`        | Django secret key — run `python -c "import secrets; print(secrets.token_hex(50))"` to generate one | Yes      |
+| `POSTGRES_USER`     | PostgreSQL username                              | Yes      |
+| `POSTGRES_DB`       | PostgreSQL database name                         | Yes      |
+| `POSTGRES_PASSWORD` | PostgreSQL password                              | Yes      |
+| `GEMINI_API_KEY`    | Google Gemini API key (optional — not yet wired into the app, reserved for future AI features) | No       |
+
+> **Never commit your `.env` file.** It is already listed in `.gitignore`.
+
+---
+
+## Running the Django Application
+
+### Option A: Using Docker Compose (Recommended)
+
+Docker Compose starts all required services (PostgreSQL, Redis, Qdrant) along with the Django app and Celery worker.
+
+```bash
+docker compose up --build
+```
+
+The app will be available at [http://localhost:8000](http://localhost:8000).
+
+To run only the backing services (so you can run Django locally):
+
+```bash
+docker compose up db redis qdrant
+```
+
+### Option B: Running Without Docker (Advanced)
+
+> **Note:** The current Django configuration hardcodes the database host as `db` and the Celery broker as `redis://redis:6379/0` to match Docker Compose service names. Running Django directly on your host machine requires either:
+> - Adding `db` and `redis` entries to your `/etc/hosts` pointing to `127.0.0.1`, or
+> - Temporarily updating `DATABASES["HOST"]` and `CELERY_BROKER_URL` in `toasty/settings.py` to use `localhost`.
+
+Once your backing services are reachable, run:
+
+```bash
+# Apply database migrations
+python manage.py migrate
+
+# Start the development server
+python manage.py runserver
+```
+
+The app will be available at [http://localhost:8000](http://localhost:8000).
+
+---
+
+## Running the Cloudflare Worker
+
+The Cloudflare Worker is a serverless Python backend deployed to Cloudflare's global edge network.
+
+### Local Development
+
+```bash
+# Start the local dev server (available at http://localhost:8787)
+npm run dev
+```
+
+### Deployment
+
+```bash
+# Deploy to Cloudflare Workers
+npm run deploy
+```
+
+See [WORKER.md](WORKER.md) for full documentation on the worker, its API endpoints, and configuration.
+
+---
+
+## Code Style and Linting
+
+This project uses several tools to enforce code quality. They are configured as pre-commit hooks and will run automatically before each commit.
+
+| Tool      | Purpose                              | Config              |
+|-----------|--------------------------------------|---------------------|
+| `black`   | Python code formatting               | `pyproject.toml`    |
+| `ruff`    | Python linting and import sorting    | `pyproject.toml`    |
+| `bandit`  | Python security checks               | `pyproject.toml`    |
+| `djlint`  | Django template formatting and linting | `pyproject.toml`  |
+
+To run all checks manually:
+
+```bash
+pre-commit run --all-files
+```
+
+To run individual tools:
+
+```bash
+# Format code
+black .
+
+# Lint code
+ruff check .
+
+# Security scan
+bandit -c pyproject.toml -r .
+```
+
+---
+
+## Running Tests
+
+### Django Application Tests
+
+```bash
+python manage.py test
+```
+
+### Cloudflare Worker Tests
+
+```bash
+python test_worker.py
+```
+
+---
+
+## Submitting a Pull Request
+
+1. Create a new branch from `main`:
+
    ```bash
    git checkout -b feature/your-feature-name
    ```
 
-2. **Make your changes**
-   - Write clear, concise commit messages
-   - Follow the existing code style
-   - Add tests for new functionality
-   - Update documentation as needed
+2. Make your changes, following the code style guidelines above.
 
-3. **Run tests and linting**
+3. Ensure all tests pass and linting is clean:
+
    ```bash
-   pytest
-   black toasty/
-   ruff check toasty/
-   mypy toasty/
+   pre-commit run --all-files
+   python manage.py test
+   python test_worker.py
    ```
 
-4. **Submit your pull request**
-   - Provide a clear description of your changes
-   - Reference any related issues
-   - Ensure CI checks pass
+4. Commit your changes with a clear, descriptive message.
 
-## Development Setup
+5. Push your branch and open a pull request against `main`.
 
-1. **Clone your fork**
-   ```bash
-   git clone https://github.com/your-username/Toasty.git
-   cd Toasty
-   ```
+6. Describe what your PR does and link any related issues.
 
-2. **Create a virtual environment**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+---
 
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+## Questions or Issues?
 
-4. **Set up environment variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your credentials
-   ```
+If you have questions or run into problems, please [open an issue](https://github.com/OWASP-BLT/BLT-Toasty/issues) on GitHub.
 
-5. **Run tests**
-   ```bash
-   pytest
-   ```
-
-## Code Style
-
-- Follow PEP 8 guidelines
-- Use type hints for function signatures
-- Write docstrings for all public functions and classes
-- Keep functions focused and single-purpose
-- Maximum line length: 120 characters
-
-### Example
-
-```python
-def analyze_code(code: str, language: str) -> dict[str, Any]:
-    """
-    Analyze code for potential issues.
-
-    Args:
-        code: Source code to analyze
-        language: Programming language of the code
-
-    Returns:
-        Dictionary containing analysis results
-    """
-    # Implementation
-    pass
-```
-
-## Testing
-
-- Write tests for all new functionality
-- Maintain or improve code coverage
-- Use descriptive test names
-- Mock external API calls
-
-### Running Tests
-
-```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=toasty --cov-report=html
-
-# Run specific test file
-pytest tests/test_webhook.py
-
-# Run specific test
-pytest tests/test_webhook.py::test_health_check
-```
-
-## Documentation
-
-- Update README.md for user-facing changes
-- Add docstrings for all public APIs
-- Include examples in documentation
-- Keep documentation up-to-date with code changes
-
-## Commit Messages
-
-Follow conventional commit format:
-
-```
-type(scope): subject
-
-body
-
-footer
-```
-
-Types:
-- `feat`: New feature
-- `fix`: Bug fix
-- `docs`: Documentation changes
-- `style`: Code style changes (formatting, etc.)
-- `refactor`: Code refactoring
-- `test`: Adding or updating tests
-- `chore`: Maintenance tasks
-
-Example:
-```
-feat(handlers): add support for draft PR events
-
-Add handler for draft pull request events to provide
-early feedback on work-in-progress changes.
-
-Closes #123
-```
-
-## Security
-
-- Never commit secrets or credentials
-- Report security vulnerabilities privately
-- Follow secure coding practices
-- Validate all user inputs
-
-## Questions?
-
-Feel free to open an issue for questions or join our community discussions.
-
-Thank you for contributing to Toasty! 🎉
+Thank you for contributing! 🎉
