@@ -79,7 +79,7 @@ cp .env.example .env
 | `POSTGRES_USER`     | PostgreSQL username                              | Yes      |
 | `POSTGRES_DB`       | PostgreSQL database name                         | Yes      |
 | `POSTGRES_PASSWORD` | PostgreSQL password                              | Yes      |
-| `CLOUDFLARE_AI_MODEL` | Cloudflare Workers AI model ID (optional override for worker AI review) | No       |
+| `CLOUDFLARE_AI_MODEL` | Cloudflare Workers AI model ID (optional override; set via Worker env bindings such as `wrangler.toml` `[vars]`) | No       |
 
 > **Never commit your `.env` file.** It is already listed in `.gitignore`.
 

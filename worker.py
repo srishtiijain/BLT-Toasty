@@ -90,7 +90,7 @@ async def on_fetch(request, env):
             return create_method_not_allowed_response(path, ['POST'])
     elif path == '/api/status':
         if method in ('GET', 'HEAD'):
-            return handle_status(request)
+            return handle_status(request, env)
         else:
             return create_method_not_allowed_response(path, ['GET', 'HEAD'])
     else:
@@ -267,7 +267,7 @@ async def handle_review(request, env):
         return create_error_response(f"Error processing review request: {str(e)}", 500)
 
 
-def handle_status(request):
+def handle_status(request, env):
     """
     Handle status check endpoint.
     
@@ -277,6 +277,8 @@ def handle_status(request):
     Returns:
         Response: Service status information
     """
+    cloudflare_ai_status = "available" if is_cloudflare_ai_available(env) else "unavailable"
+
     status_data = {
         "service": "toasty-backend",
         "status": "operational",
@@ -285,7 +287,7 @@ def handle_status(request):
             "code_review": "available",
             "health_check": "available",
             "status_monitoring": "available",
-            "cloudflare_ai_review": "available"
+            "cloudflare_ai_review": cloudflare_ai_status
         },
         "uptime": "available"
     }
@@ -399,6 +401,23 @@ def extract_cloudflare_ai_text(ai_result):
     return ""
 
 
+def is_cloudflare_ai_available(env):
+    """
+    Check if the Cloudflare Workers AI binding is configured.
+    """
+    return getattr(env, "AI", None) is not None
+
+
+def get_cloudflare_ai_model(env):
+    """
+    Resolve the configured Cloudflare Workers AI model override.
+    """
+    configured_model = getattr(env, "CLOUDFLARE_AI_MODEL", None)
+    if isinstance(configured_model, str) and configured_model.strip():
+        return configured_model.strip()
+    return DEFAULT_CLOUDFLARE_AI_MODEL
+
+
 async def generate_cloudflare_ai_review(code, language, context, env):
     """
     Generate review text using Cloudflare Workers AI binding.
@@ -406,6 +425,7 @@ async def generate_cloudflare_ai_review(code, language, context, env):
     ai_binding = getattr(env, "AI", None)
     if ai_binding is None:
         return None, "AI binding is not configured"
+    ai_model = get_cloudflare_ai_model(env)
 
     prompt = (
         "You are an expert code reviewer. Provide concise review feedback.\n"
@@ -418,7 +438,7 @@ async def generate_cloudflare_ai_review(code, language, context, env):
 
     try:
         ai_result = await ai_binding.run(
-            DEFAULT_CLOUDFLARE_AI_MODEL,
+            ai_model,
             {
                 "prompt": prompt,
                 "max_tokens": 700
