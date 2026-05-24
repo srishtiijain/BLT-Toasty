@@ -124,22 +124,6 @@ See `worker.py` for detailed API documentation.
 3. Install Worker/App dependencies: `npm install`
 4. Copy `.env.example` to `.env` and fill in your values
 
-## Architecture
-
-### Core Flow
-
-1. GitHub sends webhook → Cloudflare Worker
-2. Worker validates signature
-3. Worker fetches PR data from GitHub API
-4. Worker sends structured context to AI agent
-5. Worker posts AI review back to GitHub
-
-For the `/plan` command:
-1. User comments `/plan` on an issue
-2. GitHub App receives webhook
-3. App generates structured implementation plan
-4. App posts plan as a comment
-
 ## License
 
 GNU Affero General Public License v3 - see [LICENSE](LICENSE) for details.

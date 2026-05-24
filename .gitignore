@@ -1,4 +1,4 @@
-# Python / Django #
+# Django #
 *.log
 *.pot
 *.pyc
@@ -9,7 +9,8 @@ media
 # Backup files #
 *.bak
 
-# PyCharm #
+# If you are using PyCharm #
+# User-specific stuff
 .idea/**/workspace.xml
 .idea/**/tasks.xml
 .idea/**/usage.statistics.xml
