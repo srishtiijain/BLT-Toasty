@@ -160,9 +160,11 @@ BANDIT_RULES = [
     {
         "id": "B310",
         "name": "request_without_timeout",
-        "pattern": r"\brequests\.(get|post|put|delete|patch|head)\s*\([^)]*\)",
+        # Matches requests.get/post/etc. calls that do NOT contain 'timeout='
+        # Uses a negative lookahead so calls with timeout= are not flagged
+        "pattern": r"\brequests\.(get|post|put|delete|patch|head)\s*\((?![^)]*\btimeout\s*=)[^)]*\)",
         "severity": "LOW",
-        "message": "HTTP request made without a timeout. This can cause the application to hang indefinitely.",
+        "message": "HTTP request made without a timeout. This can cause the application to hang indefinitely. Add timeout=seconds to the call.",
         "cwe": "CWE-400",
     },
 ]
@@ -335,15 +337,11 @@ def run_semgrep_scan(code: str) -> list:
 
 
 def deduplicate_findings(findings: list) -> list:
-    """
-    Remove duplicate findings where Bandit and Semgrep both flagged
-    the same line for the same underlying issue (e.g., pickle).
-    Keeps the first occurrence.
-    """
+   
     seen = set()
     unique = []
     for f in findings:
-        key = (f["line_number"], f["cwe"])
+        key = (f["rule_id"], f["line_number"])
         if key not in seen:
             seen.add(key)
             unique.append(f)
@@ -446,13 +444,36 @@ async def run_gemini_analysis(code: str, findings: list, language: str, gemini_a
             headers={"Content-Type": "application/json"},
             body=json.dumps(payload),
         )
+
+        # Check HTTP status — a non-2xx response means Gemini failed
+        # (e.g. invalid API key, quota exceeded, service error)
+        if response.status < 200 or response.status >= 300:
+            response_text = await response.text()
+            return {
+                "available": False,
+                "reason": f"Gemini API returned HTTP {response.status}: {response_text[:200]}",
+                "issue_explanations": [],
+                "overall_risk_level": "Unknown",
+                "overall_summary": "Gemini AI analysis failed. Check your GEMINI_API_KEY and quota.",
+            }
+
         response_text = await response.text()
         response_data = json.loads(response_text)
 
+        # Check that Gemini actually returned candidates
+        candidates = response_data.get("candidates")
+        if not candidates:
+            return {
+                "available": False,
+                "reason": "Gemini returned no candidates. Possible quota issue or blocked prompt.",
+                "issue_explanations": [],
+                "overall_risk_level": "Unknown",
+                "overall_summary": "Gemini AI analysis returned an empty response.",
+            }
+
         # Extract text from Gemini response structure
         gemini_text = (
-            response_data
-            .get("candidates", [{}])[0]
+            candidates[0]
             .get("content", {})
             .get("parts", [{}])[0]
             .get("text", "")
@@ -632,7 +653,10 @@ async def handle_review(request, env):
                 pass
 
         body = await request.text()
-        if len(body) > MAX_BODY_SIZE:
+        # Encode to bytes first — len(body) counts characters, not bytes.
+        # A UTF-8 character can be 1-4 bytes, so a string with multi-byte
+        # characters could exceed 1MB while len() shows a smaller number.
+        if len(body.encode("utf-8")) > MAX_BODY_SIZE:
             return create_error_response("Request body too large.", 413)
         if not body:
             return create_error_response("Request body is required.", 400)
